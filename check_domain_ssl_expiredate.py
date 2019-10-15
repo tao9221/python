@@ -3,6 +3,7 @@
 
 import time
 import sys
+import os
 import re
 import json
 import requests
@@ -17,7 +18,7 @@ import weixin
 
 def send(msg):
     token=weixin.get_accessToken()
-    weixin.send(token,"xxxxxxxxx",msg)
+    weixin.send(token,"@all",msg)
 
 def w_log(msg):
     with open('/var/log/checkssl.log','a+') as f:
@@ -45,6 +46,7 @@ def get_ssl_mesg(domain="baidu.com"):
             }
     else:
         data = {"runstat":0}
+    s.close()
     return data 
 
 def get_domain_mesg(domain="baidu.com"):
@@ -52,17 +54,27 @@ def get_domain_mesg(domain="baidu.com"):
     run_stat = 0
     if data['expiration_date']:
         run_stat = 1
-        last_time = (data['expiration_date']-datetime.datetime.now()).days
         status = ''
         if isinstance(data['status'],unicode):
             status = data['status'].split(' ')[0]
         elif isinstance(data['status'],list):
             status = data['status'][0]
+        if isinstance(data.get('expiration_date'),list):
+            last_time = (data.get('expiration_date')[0]-datetime.datetime.now()).days
+        else:
+            last_time = (data.get('expiration_date')-datetime.datetime.now()).days
+        if isinstance(data.get('creation_date'),list):
+            data['creation_date'] = data.get('creation_date')[0]
+        if isinstance(data.get('expiration_date'),list):
+            data['expiration_date'] = data.get('expiration_date')[0]
+        if isinstance(data.get('updated_date'),list):
+            data['updated_date'] = data.get('updated_date')[0]
+        
         datas = {
             'ym':domain,
-            'sqsj':data['creation_date'], 
-            'yxsj':data['expiration_date'], 
-            'gxsj':data['updated_date'],
+            'sqsj':data.get('creation_date','无信息'),
+            'yxsj':data.get('expiration_date','无信息'), 
+            'gxsj':data.get('updated_date','无信息'),
             'gqsj':last_time, 
             'ymzt':status,
             'runstat':run_stat
@@ -72,35 +84,47 @@ def get_domain_mesg(domain="baidu.com"):
     return datas
 
 def get_domain_list():
-    file = './domain.txt'
+    #file = './domain.txt'
+    file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'domain.txt')
     domain_list = []
     if file:
         with open(file) as f:
-            domain_list.extend(f.readlines())
+            for l in f.readlines():
+                if not l.startswith('#'):
+                    domain_list.append(l)
     return domain_list
+
+def check_ssl(dm):
+    dm_msg = get_ssl_mesg(dm)
+    if dm_msg['runstat'] == 1:
+        if int(dm_msg['gqsj']) < 60:
+            ssl_data = 'SSL证书检测结果:\n域名:{ym}\n公司:{gs}\n有效时间:{yxsj}\n过期时间:还有 {gqsj} 天过期\n证书类型:{zslx}\n颁发机构:{bfjg}\n'.format(**dm_msg)
+            send(ssl_data)
+            w_log(w_log('SSL证书检测:{}:{}!!!!!!!!\n'.format(dm,dm_msg['gqsj'])))
+        else:
+            w_log('SSL证书检测:{}:{}\n'.format(dm,dm_msg['gqsj']))
+
+def check_domain(dm):
+    dm_doamin = get_domain_mesg(dm)
+    if dm_doamin['runstat'] == 1:
+        if int(dm_doamin['gqsj']) < 30:
+            domain_data = '域名检测结果:\n域名:{ym}\n申请时间:{sqsj}\n更新时间:{gxsj}\n过期时间:{yxsj}\n有效时间:还有 {gqsj} 天过期\n域名状态:{ymzt}\n'.format(**dm_doamin)
+            send(domain_data)
+            w_log('域名检测:{}:{}!!!!!!!!\n'.format(dm,dm_doamin['gqsj']))
+        else:
+            w_log('域名检测:{}:{}\n'.format(dm,dm_doamin['gqsj']))
 
 def run():
     dm_list = get_domain_list()
     if len(dm_list) > 0:
         for dm in dm_list:
             dm = dm.strip()
-            dm_msg = get_ssl_mesg(dm)
-            dm_doamin = get_domain_mesg(dm)
-            if dm_doamin['runstat'] == 1:
-                if int(dm_doamin['gqsj']) < 30:
-                    domain_data = '域名检测结果:\n域名:{ym}\n申请时间:{sqsj}\n更新时间:{gxsj}\n过期时间:{yxsj}\n有效时间:还有 {gqsj} 天过期\n域名状态:{ymzt}\n'.format(**dm_doamin) 
-                    send(domain_data)
-                    w_log('域名检测:{}:{}!!!!!!!!\n'.format(dm,dm_doamin['gqsj']))
-                else:
-                    w_log('域名检测:{}:{}\n'.format(dm,dm_doamin['gqsj']))
-            if dm_msg['runstat'] == 1:
-                if int(dm_msg['gqsj']) < 60:
-                    ssl_data = 'SSL证书检测结果:\n域名:{ym}\n公司:{gs}\n有效时间:{yxsj}\n过期时间:还有 {gqsj} 天过期\n证书类型:{zslx}\n颁发机构:{bfjg}\n'.format(**dm_msg)
-                    send(ssl_data)
-                    w_log(w_log('SSL证书检测:{}:{}!!!!!!!!\n'.format(dm,dm_msg['gqsj'])))
-                else:
-                    w_log('SSL证书检测:{}:{}\n'.format(dm,dm_msg['gqsj']))
+            if 'https' in dm:
+                dm = dm.replace('https://','')
+                check_domain(dm)
+                check_ssl(dm)
+            else:
+                check_domain(dm)
 
 if __name__ == "__main__":
     run()
-
