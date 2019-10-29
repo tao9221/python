@@ -27,7 +27,7 @@ def send(msg):
 
 def send_mail(message):
     try:
-        mail.send_email(title='过期预警',recervers=['625969486@qq.com','qinjuntao@gome.com.cn','aosre@gome.com.cn'],msg=message)
+        mail.send_email(title='过期预警',recervers=['xxx@qq.com'],msg=message)
     except Exception, e:
         w_log('{0} send mail error\n'.format(message))
 
