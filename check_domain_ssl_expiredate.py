@@ -10,7 +10,7 @@ import requests
 import whois
 import time
 import datetime
-from multiprocessing import Process
+from multiprocessing import Process, Pool
 
 reload(sys)
 sys.setdefaultencoding('utf-8')
@@ -26,8 +26,13 @@ def send(msg):
     weixin.send(token,"15601119330",msg)
 
 def send_mail(message):
+    data = {}
+    data['to'] = 'sre@163.com'
+    data['title'] = '过期域名或者证书监测'
+    data['message'] = message.replace('\n','<br \>')
+    url = 'http://10.58.165.166:8866/sendmail'
     try:
-        mail.send_email(title='过期预警',recervers=['xxx@qq.com'],msg=message)
+        requests.post(url, data=data)
     except Exception, e:
         w_log('{0} send mail error\n'.format(message))
 
@@ -116,7 +121,7 @@ def get_domain_list():
 def check_ssl(dm):
     dm_msg = get_ssl_mesg(dm)
     if dm_msg.get('runstat',0) == 1:
-        if int(dm_msg['gqsj']) < 30:
+        if int(dm_msg['gqsj']) < 60:
             ssl_data = 'SSL证书检测结果:\n域名:{ym}\n公司:{gs}\n有效时间:{yxsj}\n过期时间:还有 {gqsj} 天过期\n证书类型:{zslx}\n颁发机构:{bfjg}\n'.format(**dm_msg)
             send(ssl_data)
             send_mail(ssl_data)
@@ -141,20 +146,18 @@ def run():
     domain_dm = []
     start = time.time()
     if len(dm_list) > 0:
+        pool = Pool()
         for dm in dm_list:
             dm = dm.strip()
             if 'https' in dm:
                 dm = dm.replace('https://','')
                 domain_dm.append(dm)
-                p = Process(target=check_ssl, args=(dm,))
-                domain_ssl.append(p)
-                p.start()
+                pool.apply_async(check_ssl, args=(dm,))
             else:
                 domain_dm.append(dm)
-    for n in domain_ssl:
-        n.join()
+        pool.close()
+        pool.join() 
     for dm in domain_dm:
-        print(dm)
         check_domain(dm)
     end = time.time()
     w_log("本次运行使用时间: {0} 秒\n".format(end-start))
