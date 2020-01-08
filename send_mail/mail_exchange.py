@@ -2,13 +2,14 @@
 #coding:utf-8
 
 import sys
-from exchangelib import DELEGATE, Credentials, Account, Message, Mailbox, HTMLBody, Configuration
+import os
+from exchangelib import DELEGATE, Credentials, Account, Message, Mailbox, HTMLBody, Configuration, FileAttachment
 
-username = 'xxx@xxx.com.cn'
-password = 'xxx'
-r_server = 'owa.corp.xxx.com.cn'
+username = 'xxx@mail.com'
+password = 'pwd'
+r_server = 'owa.corp.mail.com'
 
-def send_email(title='报警邮件',recervers='xxx@qq.com',msg='content'):
+def send_email(title='报警邮件',recervers='xxxx@qq.com',msg='content', file_name=''):
     try:
         credentials = Credentials(username, password)
         config = Configuration(server=r_server, credentials=credentials)
@@ -22,9 +23,16 @@ def send_email(title='报警邮件',recervers='xxx@qq.com',msg='content'):
         account = account,
         subject=title,
         body=HTMLBody(msg),
-        to_recipients = [Mailbox(email_address=recervers)]
+        to_recipients = [Mailbox(email_address=x) for x in recervers.split(',')]
     )
-    m.send()
+    if file_name:
+        with open(os.path.abspath(r"../work_flow/sre.xls"), "rb") as f:
+            cont = f.read()
+        attchF = FileAttachment(name='值班表.xls', content=cont)
+        m.attach(attchF)
+        m.send_and_save()
+    else:
+        m.send()
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
@@ -34,3 +42,4 @@ if __name__ == "__main__":
     recerverss = sys.argv[2]
     message = sys.argv[3]
     send_email(title=titles,recervers=recerverss,msg=message)
+    #send_email(title="baojing",recervers="xxx@mail.com",msg="diyifeng", file_name='sre')
