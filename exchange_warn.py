@@ -1,24 +1,26 @@
-#!/usr/local/python3.6/bin/python
+#!/usr/local/python3.6/bin/python3
 #coding:utf-8
 
 import sys
 import os
-from exchangelib import Credentials, Account
+from exchangelib import DELEGATE, Credentials, Account, Message, Mailbox, HTMLBody, Configuration
 
-sys.path.append('weixin/')
+sys.path.append('/app/script/monitor/')
 import weixin
 
 order_all_number = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'order_number.txt')
-username = 'xxxx@mail.cn'
-password = 'xxxx'
+username = 'abc@123.com'
+password = 'pwd'
+r_server = 'owa.corp.mail.cn'
 
 try:
     credentials = Credentials(username, password)
-    account = Account(username, credentials=credentials, autodiscover=True)
+    config = Configuration(server=r_server, credentials=credentials)
+    account = Account(username, autodiscover=False, config=config, access_type=DELEGATE)
 
 except Exception as e:
     print('错误: {0}'.format(e))
-    os.exit(1)
+    sys.exit(1)
 
 def send(msg):
     token=weixin.get_accessToken()
@@ -32,9 +34,13 @@ def order_mail_number():
 def handle_mail(number=1):
     data_mail = {}
     account.inbox.refresh()
-    for mail in account.inbox.children.filter(subject__icontains='工单').order_by('-datetime_received')[:number]:
-        if "SRE" in mail.text_body:
-            data_mail[mail.subject.split('---')[1]] = mail.text_body
+    for mail in account.inbox.children.filter(subject__icontains='工单ID').order_by('-datetime_received')[:number]:
+        if "SRE" in mail.text_body or "应用搭建" in mail.text_body or "Nginx接入" in mail.text_body:
+            try:
+                key = mail.subject.split('---')[1]
+                data_mail[key] = mail.text_body
+            except:
+                pass
     return data_mail
 
 def diff_number():
